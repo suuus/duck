@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bouncing Duck</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: black;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .duck {
+            position: absolute;
+            width: 100px;
+            height: auto;
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+        .squish {
+            animation: squish 0.3s ease-in-out;
+        }
+
+        @keyframes squish {
+            0% { transform: scale(1, 1); }
+            50% { transform: scale(1.2, 0.8); }
+            100% { transform: scale(1, 1); }
+        }
+        .footer {
+            position: fixed;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+        }
+        .copilot {
+            position: absolute;
+            width: 150px;
+            height: auto;
+            display: none;
+            z-index: 1000;
+            cursor: pointer;
+        }
+        .laser {
+            position: absolute;
+            height: 3px;
+            background: linear-gradient(90deg, #ff00ff, #ff66ff);
+            transform-origin: left center;
+            z-index: 999;
+            box-shadow: 0 0 8px #ff00ff, 0 0 15px #ff00ff;
+        }
+        
+        /* New laser origin effect */
+        .laser-origin {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #ff00ff;
+            border-radius: 50%;
+            z-index: 1001;
+            box-shadow: 0 0 15px #ff00ff, 0 0 30px #ff00ff;
+            animation: pulse 0.4s ease-in-out;
+            pointer-events: none;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(0); opacity: 0.5; }
+            50% { transform: scale(1.5); opacity: 1; }
+            100% { transform: scale(1); opacity: 0; }
+        }
+        
+        @keyframes evaporate {
+            to {
+                transform: scale(0) rotate(360deg);
+                opacity: 0;
+            }
+        }
+        .evaporating {
+            animation: evaporate 0.5s forwards;
+        }
+        @keyframes dissolve {
+            to {
+                filter: hue-rotate(90deg) blur(10px);
+                opacity: 0;
+                transform: scale(0.2);
+            }
+        }
+
+        @keyframes disintegrate {
+            25% {
+                clip-path: polygon(0 0, 100% 0, 100% 100%, 0% 100%);
+            }
+            50% {
+                clip-path: polygon(25% 0, 75% 0, 100% 100%, 0% 100%);
+            }
+            75% {
+                clip-path: polygon(50% 0, 50% 0, 75% 100%, 25% 100%);
+            }
+            100% {
+                clip-path: polygon(50% 0, 50% 0, 50% 0, 50% 0);
+                opacity: 0;
+            }
+        }
+
+        @keyframes catchFire {
+            0% {
+                filter: brightness(1) saturate(1);
+                transform: scale(1);
+            }
+            15% {
+                filter: brightness(1.5) sepia(0.5) hue-rotate(-20deg) saturate(2);
+                transform: scale(1.1) rotate(-5deg);
+            }
+            30% {
+                filter: brightness(2) sepia(0.8) hue-rotate(-30deg) saturate(3);
+                transform: scale(1.15) rotate(5deg);
+            }
+            60% {
+                filter: brightness(2.5) sepia(1) hue-rotate(-40deg) saturate(5);
+                transform: scale(1.1) rotate(-8deg);
+            }
+            85% {
+                filter: brightness(3) sepia(1) hue-rotate(-50deg) saturate(8);
+                transform: scale(0.8) rotate(10deg);
+                opacity: 0.6;
+            }
+            100% {
+                filter: brightness(3) sepia(1) hue-rotate(-60deg) saturate(10);
+                transform: scale(0) rotate(15deg);
+                opacity: 0;
+            }
+        }
+
+        .dissolving {
+            animation: dissolve 0.8s forwards;
+        }
+
+        .disintegrating {
+            animation: disintegrate 1s forwards;
+        }
+
+        .burning {
+            animation: catchFire 2s forwards;
+            z-index: 100;
+        }
+
+        .fire-particles {
+            position: absolute;
+            pointer-events: none;
+            z-index: 99;
+        }
+
+        @keyframes sparkle {
+            0% {
+                filter: brightness(1) saturate(1);
+                transform: scale(1);
+            }
+            25% {
+                filter: brightness(2) hue-rotate(90deg) saturate(2);
+                transform: scale(1.2) rotate(-5deg);
+            }
+            50% {
+                filter: brightness(3) hue-rotate(180deg) saturate(3);
+                transform: scale(1.1) rotate(5deg);
+            }
+            75% {
+                filter: brightness(2) hue-rotate(270deg) saturate(2);
+                transform: scale(0.9) rotate(-8deg);
+                opacity: 0.7;
+            }
+            100% {
+                filter: brightness(3) hue-rotate(360deg) saturate(3);
+                transform: scale(0) rotate(15deg);
+                opacity: 0;
+            }
+        }
+
+        .sparkling {
+            animation: sparkle 1.5s forwards;
+            z-index: 100;
+        }
+
+        .sparkle-particle {
+            position: absolute;
+            pointer-events: none;
+            z-index: 99;
+            background: white;
+            border-radius: 50%;
+            mix-blend-mode: screen;
+        }
+    </style>
+</head>
+<body>
+    <img class="duck" src="rubberduckie.png" alt="Bouncing Duck">
+    <img id="copilot" class="copilot" src="thecopilot.png" alt="Copilot">
+    <div class="footer">Happy Coding</div>
+
+    <script>
+        // Keep track of all duck instances
+        const duckInstances = new Set();
+        const copilot = document.getElementById('copilot');
+        let copilotActive = false;
+
+        function checkDuckCount() {
+            if (duckInstances.size > 10 && !copilotActive) {
+                copilotActive = true;
+                copilot.style.display = 'block';
+                initializeCopilot();
+            } else if (duckInstances.size <= 10 && copilotActive) {
+                copilotActive = false;
+                copilot.style.display = 'none';
+            }
+        }
+
+        function initializeCopilot() {
+            const moveSpeed = 3;
+            let copilotX = window.innerWidth / 2;
+            let copilotY = window.innerHeight / 2;
+            let lastShotTime = 0;
+            const shootingCooldown = 400; // Time between shots
+            
+            // Make sure Copilot is visible
+            copilot.style.display = 'block';
+            
+            // Add click handler for manual laser shooting
+            initializeClickShootingForCopilot();
+
+            function moveCopilot() {
+                if (duckInstances.size > 10) {
+                    // Find nearest duck for targeting
+                    let nearestDuck = null;
+                    let nearestDistance = Infinity;
+                    
+                    for (const duck of duckInstances) {
+                        if (!duck.sparkling) {
+                            const dx = duck.x + duck.width/2 - copilotX;
+                            const dy = duck.y + duck.height/2 - copilotY;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (distance < nearestDistance) {
+                                nearestDistance = distance;
+                                nearestDuck = duck;
+                            }
+                        }
+                    }
+
+                    // Move towards nearest duck
+                    if (nearestDuck) {
+                        const targetX = nearestDuck.x - copilot.offsetWidth / 2;
+                        const targetY = nearestDuck.y - copilot.offsetHeight / 2;
+                        
+                        // Move faster when there are more ducks
+                        const speedMultiplier = duckInstances.size > 25 ? 0.15 : 0.08;
+                        copilotX += (targetX - copilotX) * speedMultiplier;
+                        copilotY += (targetY - copilotY) * speedMultiplier;
+
+                        // Auto-shoot with faster rate when there are more ducks
+                        const currentTime = Date.now();
+                        const currentCooldown = duckInstances.size > 25 ? shootingCooldown / 2 : shootingCooldown;
+                        if (currentTime - lastShotTime > currentCooldown) {
+                            autoShootLaser(nearestDuck);
+                            lastShotTime = currentTime;
+                        }
+                    }
+
+                    copilot.style.left = copilotX + 'px';
+                    copilot.style.top = copilotY + 'px';
+                } else if (copilotActive) {
+                    // When duck population drops to 10 or below, hide Copilot
+                    copilotActive = false;
+                    copilot.style.display = 'none';
+                }
+                
+                if (copilotActive) {
+                    requestAnimationFrame(moveCopilot);
+                }
+            }
+
+            if (copilotActive) {
+                moveCopilot();
+            }
+        }
+
+        function autoShootLaser(targetDuck) {
+            // Add origin effect first
+            const laserOrigin = document.createElement('div');
+            laserOrigin.className = 'laser-origin';
+            document.body.appendChild(laserOrigin);
+            
+            // Calculate position for where the laser comes from (center of Copilot)
+            const copilotRect = copilot.getBoundingClientRect();
+            const originX = copilotRect.left + (copilotRect.width * 0.65); // Position it near the right side
+            const originY = copilotRect.top + (copilotRect.height * 0.4); // Position it near the top half
+            
+            laserOrigin.style.left = originX + 'px';
+            laserOrigin.style.top = originY + 'px';
+            
+            // Create the actual laser with a slight delay for the charging effect
+            setTimeout(() => {
+                const laser = document.createElement('div');
+                laser.className = 'laser';
+                document.body.appendChild(laser);
+
+                const targetX = targetDuck.x + targetDuck.width / 2;
+                const targetY = targetDuck.y + targetDuck.height / 2;
+
+                // Calculate angle and length for laser
+                let angle = Math.atan2(targetY - originY, targetX - originX);
+                const length = Math.hypot(targetX - originX, targetY - originY);
+
+                laser.style.left = originX + 'px';
+                laser.style.top = originY + 'px';
+                laser.style.width = length + 'px';
+                laser.style.transform = `rotate(${angle}rad)`;
+
+                // Check for hits on all ducks in the laser's path
+                for (const duck of duckInstances) {
+                    if (!duck.sparkling) {
+                        const duckCenterX = duck.x + duck.width / 2;
+                        const duckCenterY = duck.y + duck.height / 2;
+                        
+                        // Calculate distance from duck center to laser line
+                        const distance = Math.abs((targetY - originY) * duckCenterX - 
+                                               (targetX - originX) * duckCenterY + 
+                                               targetX * originY - targetY * originX) /
+                                       Math.sqrt((targetY - originY) ** 2 + (targetX - originX) ** 2);
+
+                        if (distance < 40) { // Increased hit threshold for better accuracy
+                            makeSparkle(duck);
+                        }
+                    }
+                }
+
+                setTimeout(() => laser.remove(), 200);
+            }, 50); // Short delay for the charging effect
+            
+            // Remove the origin effect after animation
+            setTimeout(() => laserOrigin.remove(), 400);
+        }
+
+        function shootLaser(e) {
+            // Add origin effect first
+            const laserOrigin = document.createElement('div');
+            laserOrigin.className = 'laser-origin';
+            document.body.appendChild(laserOrigin);
+            
+            const copilotRect = copilot.getBoundingClientRect();
+            const originX = copilotRect.left + (copilotRect.width * 0.65);
+            const originY = copilotRect.top + (copilotRect.height * 0.4);
+            
+            laserOrigin.style.left = originX + 'px';
+            laserOrigin.style.top = originY + 'px';
+            
+            // Create the actual laser after a slight delay
+            setTimeout(() => {
+                const laser = document.createElement('div');
+                laser.className = 'laser';
+                document.body.appendChild(laser);
+                
+                const targetX = e.clientX;
+                const targetY = e.clientY;
+
+                // Calculate angle in degrees (0 is right, positive is downward)
+                let angle = Math.atan2(targetY - originY, targetX - originX) * (180 / Math.PI);
+                
+                // Restrict angle between 0 and 360 degrees for full range
+                // No restrictions on angle so lasers can go in any direction
+                
+                // Convert back to radians for the transform
+                const angleRad = angle * (Math.PI / 180);
+                
+                const length = Math.hypot(targetX - originX, targetY - originY);
+
+                laser.style.left = originX + 'px';
+                laser.style.top = originY + 'px';
+                laser.style.width = length + 'px';
+                laser.style.transform = `rotate(${angleRad}rad)`;
+
+                // Check for duck hits
+                for (const duckInstance of duckInstances) {
+                    const duckCenterX = duckInstance.x + duckInstance.width / 2;
+                    const duckCenterY = duckInstance.y + duckInstance.height / 2;
+
+                    // Check if laser intersects with duck
+                    const distance = Math.abs((targetY - originY) * duckCenterX - 
+                                           (targetX - originX) * duckCenterY + 
+                                           targetX * originY - targetY * originX) /
+                                   Math.sqrt((targetY - originY) ** 2 + (targetX - originX) ** 2);
+
+                    if (distance < 30) { // Hit threshold
+                        evaporateDuck(duckInstance);
+                    }
+                }
+
+                // Remove laser after animation
+                setTimeout(() => laser.remove(), 200);
+            }, 50);
+            
+            // Remove the origin effect after animation
+            setTimeout(() => laserOrigin.remove(), 400);
+        }
+
+        // Add a click handler to copilot to shoot lasers manually
+        function initializeClickShootingForCopilot() {
+            copilot.addEventListener('click', function() {
+                // Visual effect when clicking Copilot
+                this.style.transform = 'scale(1.1)';
+                setTimeout(() => {
+                    this.style.transform = 'scale(1)';
+                }, 100);
+                
+                // Find the closest duck to target
+                if (duckInstances.size > 0) {
+                    let nearestDuck = null;
+                    let nearestDistance = Infinity;
+                    
+                    for (const duck of duckInstances) {
+                        if (!duck.sparkling) {
+                            const dx = duck.x + duck.width/2 - parseFloat(copilot.style.left);
+                            const dy = duck.y + duck.height/2 - parseFloat(copilot.style.top);
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (distance < nearestDistance) {
+                                nearestDistance = distance;
+                                nearestDuck = duck;
+                            }
+                        }
+                    }
+                    
+                    if (nearestDuck) {
+                        autoShootLaser(nearestDuck);
+                    }
+                }
+            });
+        }
+
+        function createFireParticle(x, y) {
+            const particle = document.createElement('div');
+            particle.className = 'fire-particles';
+            particle.style.left = x + 'px';
+            particle.style.top = y + 'px';
+            particle.style.width = '8px';
+            particle.style.height = '8px';
+            particle.style.background = `hsl(${30 + Math.random() * 20}, 100%, 50%)`;
+            particle.style.borderRadius = '50%';
+            document.body.appendChild(particle);
+
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 1 + Math.random() * 2;
+            const lifetime = 500 + Math.random() * 500;
+            let opacity = 1;
+
+            const animate = () => {
+                const left = parseFloat(particle.style.left);
+                const top = parseFloat(particle.style.top);
+                particle.style.left = (left + Math.cos(angle) * speed) + 'px';
+                particle.style.top = (top + Math.sin(angle) * speed - 1) + 'px';
+                opacity -= 0.02;
+                particle.style.opacity = opacity;
+
+                if (opacity > 0) {
+                    requestAnimationFrame(animate);
+                } else {
+                    particle.remove();
+                }
+            };
+
+            animate();
+            setTimeout(() => particle.remove(), lifetime);
+        }
+
+        function startBurningEffect(duckInstance) {
+            const particleInterval = setInterval(() => {
+                if (!duckInstance.duck.isConnected) {
+                    clearInterval(particleInterval);
+                    return;
+                }
+                for(let i = 0; i < 3; i++) { // Create more particles
+                    const rect = duckInstance.duck.getBoundingClientRect();
+                    createFireParticle(
+                        rect.left + rect.width * Math.random(),
+                        rect.top + rect.height * Math.random()
+                    );
+                }
+            }, 30); // More frequent particles
+
+            return particleInterval;
+        }
+
+        function evaporateDuck(duckInstance) {
+            if (duckInstance.burning) return;
+            duckInstance.burning = true;
+            
+            // Always use burning effect for laser hits
+            duckInstance.duck.classList.add('burning');
+            
+            // Enhance fire particle effects
+            const particleInterval = startBurningEffect(duckInstance);
+
+            // Check for fire spread more frequently
+            const spreadInterval = setInterval(() => {
+                if (!duckInstance.duck.isConnected) {
+                    clearInterval(spreadInterval);
+                    return;
+                }
+                
+                for (const otherDuck of duckInstances) {
+                    if (otherDuck !== duckInstance && !otherDuck.burning && 
+                        duckInstance.checkCollision(otherDuck)) {
+                        evaporateDuck(otherDuck);
+                    }
+                }
+            }, 50);
+
+            // Remove the duck after the animation
+            setTimeout(() => {
+                clearInterval(particleInterval);
+                clearInterval(spreadInterval);
+                duckInstance.duck.remove();
+                duckInstances.delete(duckInstance);
+                if (duckInstances.size <= 10) {
+                    copilot.style.display = 'none';
+                    copilotActive = false;
+                }
+            }, 2000);
+        }
+
+        function createSparkleParticle(x, y) {
+            const particle = document.createElement('div');
+            particle.className = 'sparkle-particle';
+            particle.style.left = x + 'px';
+            particle.style.top = y + 'px';
+            
+            // Random size for varied sparkle effect
+            const size = 2 + Math.random() * 6;
+            particle.style.width = size + 'px';
+            particle.style.height = size + 'px';
+            
+            // Rainbow colors for sparkles
+            const hue = Math.random() * 360;
+            particle.style.background = `hsl(${hue}, 100%, 75%)`;
+            particle.style.boxShadow = `0 0 ${size * 2}px hsl(${hue}, 100%, 75%)`;
+            
+            document.body.appendChild(particle);
+
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 2 + Math.random() * 4;
+            const lifetime = 300 + Math.random() * 700;
+            let opacity = 1;
+
+            const animate = () => {
+                const left = parseFloat(particle.style.left);
+                const top = parseFloat(particle.style.top);
+                particle.style.left = (left + Math.cos(angle) * speed) + 'px';
+                particle.style.top = (top + Math.sin(angle) * speed - 1) + 'px';
+                opacity -= 0.02;
+                particle.style.opacity = opacity;
+
+                if (opacity > 0) {
+                    requestAnimationFrame(animate);
+                } else {
+                    particle.remove();
+                }
+            };
+
+            animate();
+            setTimeout(() => particle.remove(), lifetime);
+        }
+
+        function startSparkleEffect(duckInstance) {
+            const particleInterval = setInterval(() => {
+                if (!duckInstance.duck.isConnected) {
+                    clearInterval(particleInterval);
+                    return;
+                }
+                for(let i = 0; i < 5; i++) { // Create multiple sparkles
+                    const rect = duckInstance.duck.getBoundingClientRect();
+                    createSparkleParticle(
+                        rect.left + rect.width * Math.random(),
+                        rect.top + rect.height * Math.random()
+                    );
+                }
+            }, 50);
+
+            return particleInterval;
+        }
+
+        function makeSparkle(duckInstance) {
+            if (duckInstance.sparkling) return;
+            duckInstance.sparkling = true;
+            
+            // Add sparkling effect
+            duckInstance.duck.classList.add('sparkling');
+            
+            // Add sparkle particles
+            const particleInterval = startSparkleEffect(duckInstance);
+
+            // Remove the duck after the animation
+            setTimeout(() => {
+                clearInterval(particleInterval);
+                duckInstance.duck.remove();
+                duckInstances.delete(duckInstance);
+                if (duckInstances.size <= 10) {
+                    copilot.style.display = 'none';
+                    copilotActive = false;
+                }
+            }, 1500);
+        }
+
+        class DuckAnimation {
+            constructor(duckElement) {
+                // Only create new duck if under population limit
+                if (duckInstances.size >= 30) {
+                    duckElement.remove();
+                    return;
+                }
+                
+                this.duck = duckElement;
+                this.x = Math.random() * (window.innerWidth - 100);
+                this.y = Math.random() * (window.innerHeight - 100);
+                this.dx = (Math.random() * 6 - 3);
+                this.dy = (Math.random() * 6 - 3);
+                this.width = 100; // Duck width
+                this.height = 100; // Duck height
+                this.isColliding = false;
+                this.effect = null;
+                this.burning = false;
+                this.sparkling = false;
+                this.collisionCount = new Map(); // Track collisions with other ducks
+                this.lastDuplicationTime = Date.now();
+                this.duplicationCooldown = 2000 + Math.random() * 2000; // Random cooldown between 2-4 seconds
+                this.animate = this.animate.bind(this);
+                this.setupClickHandler();
+                duckInstances.add(this);
+                checkDuckCount();
+                requestAnimationFrame(this.animate);
+            }
+
+            checkCollision(other) {
+                return !(this.x + this.width < other.x ||
+                    other.x + this.width < this.x ||
+                    this.y + this.height < other.y ||
+                    other.y + this.height < this.y);
+            }
+
+            handleCollision(otherDuck) {
+                if (!this.isColliding && !this.sparkling) {
+                    this.isColliding = true;
+                    
+                    // Add squish effect
+                    this.duck.classList.add('squish');
+                    
+                    // Calculate collision response
+                    const dx = this.x - otherDuck.x;
+                    const dy = this.y - otherDuck.y;
+                    const angle = Math.atan2(dy, dx);
+                    
+                    // Calculate new velocities with some randomness
+                    const speed = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
+                    const randomFactor = 0.8 + Math.random() * 0.4;
+                    
+                    this.dx = Math.cos(angle) * speed * randomFactor;
+                    this.dy = Math.sin(angle) * speed * randomFactor;
+                    
+                    // Remove squish effect after animation
+                    setTimeout(() => {
+                        this.duck.classList.remove('squish');
+                        this.isColliding = false;
+                    }, 300);
+                }
+            }
+
+            animate() {
+                if (this.sparkling) return;
+
+                const maxX = window.innerWidth - this.width;
+                const maxY = window.innerHeight - this.height;
+
+                this.x += this.dx;
+                this.y += this.dy;
+
+                // Only duplicate if under population limit
+                const currentTime = Date.now();
+                if (!this.sparkling && currentTime - this.lastDuplicationTime > this.duplicationCooldown 
+                    && duckInstances.size < 30) {
+                    createNewDuck();
+                    this.lastDuplicationTime = currentTime;
+                    this.duplicationCooldown = 2000 + Math.random() * 2000;
+                }
+
+                // Bounce off walls
+                if (this.x <= 0 || this.x >= maxX) {
+                    this.dx = -this.dx;
+                }
+                if (this.y <= 0 || this.y >= maxY) {
+                    this.dy = -this.dy;
+                }
+
+                this.x = Math.max(0, Math.min(this.x, maxX));
+                this.y = Math.max(0, Math.min(this.y, maxY));
+
+                // Check collisions with other ducks
+                for (let other of duckInstances) {
+                    if (other !== this && this.checkCollision(other)) {
+                        this.handleCollision(other);
+                        other.handleCollision(this);
+                    }
+                }
+
+                this.duck.style.left = this.x + 'px';
+                this.duck.style.top = this.y + 'px';
+
+                if (!this.sparkling) {
+                    requestAnimationFrame(this.animate);
+                }
+            }
+
+            // Remove the click handler since duplication is now automatic
+            setupClickHandler() {
+                this.duck.addEventListener('click', () => {
+                    if (!this.isColliding && !this.burning) {
+                        // Just change direction on click
+                        this.dx = -this.dx * (0.8 + Math.random() * 0.4);
+                        // Just change direction on click
+                        this.dx = -this.dx * (0.8 + Math.random() * 0.4);
+                        this.dy = -this.dy * (0.8 + Math.random() * 0.4);
+                        
+                        this.duck.classList.add('squish');
+                        setTimeout(() => {
+                            if (!this.burning) {
+                                this.duck.classList.remove('squish');
+                            }
+                        }, 200);
+                    }
+                });
+            }
+        }
+
+        function createNewDuck() {
+            const newDuck = document.createElement('img');
+            newDuck.className = 'duck';
+            newDuck.src = 'rubberduckie.png';
+            newDuck.alt = 'Bouncing Duck';
+            document.body.appendChild(newDuck);
+            new DuckAnimation(newDuck);
+        }
+
+        // Initialize the first duck
+        new DuckAnimation(document.querySelector('.duck'));
+
+        // Update laser styles for more powerful appearance
+        const style = document.createElement('style');
+        style.textContent = `
+            .laser {
+                height: 5px;
+                background: linear-gradient(90deg, rgba(255,0,255,1) 0%, rgba(255,102,255,0.7) 100%);
+                box-shadow: 0 0 15px #ff00ff, 0 0 30px #ff00ff;
+                opacity: 1;
+                animation: laserPulse 0.2s infinite alternate;
+            }
+            
+            @keyframes laserPulse {
+                from { opacity: 0.8; height: 5px; }
+                to { opacity: 1; height: 7px; }
+            }
+            
+            .fire-particles {
+                position: absolute;
+                pointer-events: none;
+                z-index: 99;
+                filter: blur(1px);
+            }
+            @keyframes catchFire {
+                0% {
+                    filter: brightness(1.2) saturate(1.2);
+                    transform: scale(1);
+                }
+                25% {
+                    filter: brightness(1.8) sepia(0.6) hue-rotate(-30deg) saturate(3);
+                    transform: scale(1.2) rotate(-5deg);
+                }
+                50% {
+                    filter: brightness(2.2) sepia(0.8) hue-rotate(-45deg) saturate(5);
+                    transform: scale(1.1) rotate(8deg);
+                }
+                75% {
+                    filter: brightness(2.5) sepia(1) hue-rotate(-60deg) saturate(8);
+                    transform: scale(0.9) rotate(-10deg);
+                    opacity: 0.7;
+                }
+                100% {
+                    filter: brightness(3) sepia(1) hue-rotate(-75deg) saturate(10);
+                    transform: scale(0) rotate(15deg);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
